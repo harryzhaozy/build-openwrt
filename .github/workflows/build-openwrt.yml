@@ -98,12 +98,17 @@ jobs:
 
       - name: Set cache dirs
         working-directory: ${{ env.WORKDIR }}
+        env:
+          CCACHE_DIR: ${{ env.CCACHE_DIR }}
+          DL_DIR: ${{ env.DL_DIR }}
         run: |
+          cp -n feeds.conf.default feeds.conf
           echo "CONFIG_DEVEL=y" >> .config
           echo "CONFIG_CCACHE=y" >> .config
-          echo "dl_dir:=${{ env.DL_DIR }}" >> feeds.conf
-          mkdir -p ${{ env.CCACHE_DIR }} ${{ env.DL_DIR }}
+          echo "dl_dir:=$DL_DIR" >> feeds.conf
+          mkdir -p "$CCACHE_DIR" "$DL_DIR"
           make defconfig
+
 
       - name: Download package sources
         working-directory: ${{ env.WORKDIR }}
