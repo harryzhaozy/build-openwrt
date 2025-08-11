@@ -35,9 +35,10 @@ jobs:
       - name: Setup tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git gettext \
-            zlib1g-dev file wget python3 python3-distutils flex bison libssl-dev \
-            unzip subversion
+          sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
+            gcc git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev \
+            libssl-dev python3 python3-pip python3-setuptools rsync subversion \
+            swig unzip wget zlib1g-dev
 
       - name: Get OpenWrt source
         run: |
