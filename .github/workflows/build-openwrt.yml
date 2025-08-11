@@ -18,12 +18,25 @@ env:
   WORKDIR: openwrt
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   DL_DIR: ${{ github.workspace }}/.dl
+  CCACHE_SIZE: 2G
+  DL_SIZE_LIMIT_MB: 500
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 360  # 最长运行时间 6 小时，可改短
+    timeout-minutes: 360
     steps:
+      # 0. 提前释放 GitHub Runner 空间
+      - name: Free disk space
+        run: |
+          echo "=== Before cleaning ==="
+          df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          echo "=== After cleaning ==="
+          df -h
+
       - name: Checkout workflow repo
         uses: actions/checkout@v4
 
@@ -37,7 +50,7 @@ jobs:
             ccache-${{ github.event.inputs.openwrt_ref }}
             ccache-
 
-      # 恢复 dl 缓存（源码包）
+      # 恢复 dl 缓存
       - name: Restore dl cache
         uses: actions/cache@v4
         with:
@@ -90,12 +103,12 @@ jobs:
       - name: Modify default settings
         working-directory: ${{ env.WORKDIR }}
         run: |
-          ls -l package/base-files/files/bin/
           sed -i 's/192.168.1.1/192.168.1.10/g' package/base-files/files/bin/config_generate
           sed -i 's/UTC/CST-8/g' package/base-files/files/bin/config_generate
           sed -i "/set system.@system\[0\].timezone='CST-8'/a\ \tset system.@system[-1].zonename='Asia/Shanghai'" \
             package/base-files/files/bin/config_generate
 
+      # 设置缓存目录 & 控制缓存大小
       - name: Set cache dirs
         working-directory: ${{ env.WORKDIR }}
         env:
@@ -105,10 +118,23 @@ jobs:
           cp -n feeds.conf.default feeds.conf
           echo "CONFIG_DEVEL=y" >> .config
           echo "CONFIG_CCACHE=y" >> .config
-          echo "DL_DIR:=$DL_DIR" >> .config
           mkdir -p "$CCACHE_DIR" "$DL_DIR"
+          ccache -M ${CCACHE_SIZE}
           make defconfig
 
+      # 检测磁盘空间
+      - name: Check disk space before build
+        run: |
+          avail=$(df --output=avail -BG . | tail -1 | tr -d 'G')
+          echo "Available space: ${avail}G"
+          if [ "$avail" -lt 10 ]; then
+            echo "Low space (<10G), cleaning caches..."
+            rm -rf ${{ env.WORKDIR }}/build_dir/* \
+                   ${{ env.WORKDIR }}/tmp/* \
+                   ${{ env.WORKDIR }}/staging_dir/*
+            find ${{ env.DL_DIR }} -type f -size +${DL_SIZE_LIMIT_MB}M -delete
+            df -h
+          fi
 
       - name: Download package sources
         working-directory: ${{ env.WORKDIR }}
@@ -118,9 +144,17 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           make -j$(nproc) || make -j1 V=s
-          # 清理大文件，防止磁盘占满
-          rm -rf build_dir/* staging_dir/* tmp/*
-          find bin/ -type f -name "*.tar.gz" -size +1M -delete
+
+      # 构建后清理
+      - name: Cleanup after build
+        run: |
+          echo "=== Cleaning build artifacts to save space ==="
+          rm -rf ${{ env.WORKDIR }}/build_dir/* \
+                 ${{ env.WORKDIR }}/staging_dir/* \
+                 ${{ env.WORKDIR }}/tmp/*
+          find ${{ env.DL_DIR }} -type f -size +${DL_SIZE_LIMIT_MB}M -delete
+          ccache -c
+          df -h
 
       - name: Save ccache cache
         uses: actions/cache@v4
