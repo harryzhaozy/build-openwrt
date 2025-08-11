@@ -105,7 +105,7 @@ jobs:
           cp -n feeds.conf.default feeds.conf
           echo "CONFIG_DEVEL=y" >> .config
           echo "CONFIG_CCACHE=y" >> .config
-          echo "dl_dir:=$DL_DIR" >> feeds.conf
+          echo "DL_DIR:=$DL_DIR" >> .config
           mkdir -p "$CCACHE_DIR" "$DL_DIR"
           make defconfig
 
