@@ -1,38 +1,53 @@
 name: Build OpenWrt and Release
 
-# 手动触发与定时触发
 on:
   workflow_dispatch:
     inputs:
       openwrt_ref:
-        description: 'OpenWrt git ref (branch/tag/commit). default: openwrt/openwrt master'
+        description: 'OpenWrt branch/tag/commit (e.g. openwrt-23.05, v23.05.3, af42c3b2)'
         required: false
         default: 'master'
       config_path:
-        description: '.config path in repo (relative). default: .config'
+        description: 'Path to .config file (default: .config in repo root)'
         required: false
         default: '.config'
-  #schedule:
-    #- cron: '0 3 * * *' # 每天 03:00 UTC(可按需修改)
 
 env:
   OPENWRT_REPO: https://github.com/openwrt/openwrt.git
-  EXTRA_FEED_GIT: https://github.com/harryzhaozy/luci-packages.git
-  WORKDIR: ${{ github.workspace }}/openwrt
-  # 缓存 key 的前缀，遇到 config 或 feeds 变化会触发新缓存
-  CACHE_PREFIX: openwrt-cache
+  CUSTOM_PACKAGES: https://github.com/harryzhaozy/luci-packages.git
+  WORKDIR: openwrt
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  DL_DIR: ${{ github.workspace }}/.dl
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 360  # 防止超时：6小时（可改）
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360  # 最长运行时间 6 小时，可改短
     steps:
-      - name: Checkout this repo
+      - name: Checkout workflow repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
-      - name: Setup tools
+      # 恢复 ccache 缓存
+      - name: Restore ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
+          restore-keys: |
+            ccache-${{ github.event.inputs.openwrt_ref }}
+            ccache-
+
+      # 恢复 dl 缓存（源码包）
+      - name: Restore dl cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DL_DIR }}
+          key: dl-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
+          restore-keys: |
+            dl-${{ github.event.inputs.openwrt_ref }}
+            dl-
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
@@ -42,131 +57,75 @@ jobs:
 
       - name: Get OpenWrt source
         run: |
-          git clone --depth 1 --branch ${{ github.event.inputs.openwrt_ref || env.openwrt_ref || 'master' }} ${{ env.OPENWRT_REPO }} ${{ env.WORKDIR }}
-        # 如果你想要指定精确 commit/branch，把 workflow_dispatch 的 openwrt_ref 填上
-
-      - name: Add extra feed (harryzhaozy/luci-packages)
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          # 将第三方包当成 feed 加入 feeds.conf.default
-          echo "src-git harry https://github.com/harryzhaozy/luci-packages.git;master" >> feeds.conf.default || true
-          # 如果你想固定某个分支或 tag，就把上面的 master 改为具体值
-
-      - name: Compute cache key inputs
-        id: keygen
-        run: |
-          # 计算与 feeds 和配置相关的哈希，确保相关变动能更新缓存
-          cd ${{ env.WORKDIR }}
-          # 如果仓库里有 .config，hash 用它；否则使用空值
-          cfg_path="${{ github.workspace }}/${{ github.event.inputs.config_path || '.config' }}"
-          if [ -f "$cfg_path" ]; then
-            config_hash=$(sha1sum "$cfg_path" | cut -d' ' -f1)
-          else
-            config_hash=""
+          git clone $OPENWRT_REPO $WORKDIR
+          cd $WORKDIR
+          ref="${{ github.event.inputs.openwrt_ref }}"
+          if git rev-parse --verify --quiet "$ref" >/dev/null; then
+            git checkout "$ref"
+          elif git ls-remote --exit-code --heads origin "$ref" >/dev/null 2>&1; then
+            git checkout -B "$ref" origin/"$ref"
+          elif git ls-remote --exit-code --tags origin "$ref" >/dev/null 2>&1; then
+            git checkout "tags/$ref"
           fi
-          feeds_hash=$(sha1sum feeds.conf.default 2>/dev/null | cut -d' ' -f1 || echo "")
-          echo "::set-output name=config_hash::$config_hash"
-          echo "::set-output name=feeds_hash::$feeds_hash"
 
-      - name: Cache OpenWrt dl
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.WORKDIR }}/dl
-          key: ${{ env.CACHE_PREFIX }}-dl-${{ steps.keygen.outputs.feeds_hash }}-${{ github.sha }}
-          restore-keys: |
-            ${{ env.CACHE_PREFIX }}-dl-${{ steps.keygen.outputs.feeds_hash }}-
-            ${{ env.CACHE_PREFIX }}-dl-
-
-      - name: Cache OpenWrt build_dir (partial)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.WORKDIR }}/build_dir
-          key: ${{ env.CACHE_PREFIX }}-build-${{ steps.keygen.outputs.config_hash }}-${{ github.sha }}
-          restore-keys: |
-            ${{ env.CACHE_PREFIX }}-build-${{ steps.keygen.outputs.config_hash }}-
-            ${{ env.CACHE_PREFIX }}-build-
-
-      - name: Prepare feeds and install
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-          # 如果你知道只需要安装某些包，可以替换上面命令为：./scripts/feeds install package1 package2
+      - name: Add custom packages
+        working-directory: ${{ env.WORKDIR }}/package
+        run: git clone $CUSTOM_PACKAGES
 
       - name: Copy Config
         working-directory: ${{ env.WORKDIR }}
         run: |
-          # 从仓库根复制 .config（可通过 workflow input 指定路径）
           cfg_path="${{ github.workspace }}/${{ github.event.inputs.config_path || '.config' }}"
           if [ -f "$cfg_path" ]; then
             cp "$cfg_path" .config
-            # 确保 defconfig 生效
             make defconfig
-          else
-            echo "Warning: config not found at $cfg_path; using source default"
           fi
+
       - name: Modify default settings
         working-directory: ${{ env.WORKDIR }}
         run: |
-          # 修改默认 IP
           sed -i 's/192\.168\.1\.1/192.168.1.10/g' package/base-files/files/bin/config_generate
-          # 修改时区
           sed -i 's/UTC/CST-8/g' package/base-files/files/bin/config_generate
-          # 添加 zonename
           echo "set system.@system[-1].zonename='Asia/Shanghai'" >> package/base-files/files/etc/config/system
 
-
-      - name: Show target & selected packages (for debug)
+      - name: Set cache dirs
         working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "Kernel/Target summary (if any):"
-          # 打印出 targets 目录，供调试
-          ls -la bin/targets || true
-          # 打印 .config 中的固件相关条目（示例）
-          grep -E "CONFIG_TARGET|CONFIG_TARGET_.*_IMAGE|CONFIG_PACKAGE_.*luci" .config || true
+          echo "CONFIG_DEVEL=y" >> .config
+          echo "CONFIG_CCACHE=y" >> .config
+          echo "dl_dir:=${{ env.DL_DIR }}" >> feeds.conf
+          mkdir -p ${{ env.CCACHE_DIR }} ${{ env.DL_DIR }}
+          make defconfig
+
+      - name: Download package sources
+        working-directory: ${{ env.WORKDIR }}
+        run: make download -j$(nproc)
 
       - name: Build OpenWrt
         working-directory: ${{ env.WORKDIR }}
+        run: |
+          make -j$(nproc) || make -j1 V=s
+          # 清理大文件，防止磁盘占满
+          rm -rf build_dir/* staging_dir/* tmp/*
+          find bin/ -type f -name "*.tar.gz" -size +1M -delete
+
+      - name: Save ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
+
+      - name: Save dl cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DL_DIR }}
+          key: dl-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
+
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: openwrt-${{ github.event.inputs.openwrt_ref || 'master' }}
+          name: "OpenWrt build ${{ github.event.inputs.openwrt_ref || 'master' }}"
+          files: ${{ env.WORKDIR }}/bin/targets/**/*
         env:
-          MAKEFLAGS: "-j$(nproc)"
-        run: |
-          # 首先尝试并行构建；如果超内存导致失败，再降级到单线程重试
-          set -o pipefail
-          if make -j$(nproc) V=s; then
-            echo "Build success (parallel)."
-          else
-            echo "Parallel build failed - retrying single-threaded with verbose output..."
-            make -j1 V=s || (echo "Build failed. See logs." && exit 1)
-          fi
-
-      - name: Collect built artifacts
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          mkdir -p ${{ github.workspace }}/artifacts
-          # 复制所有 bin/targets 下的产物（固件、sysupgrade、images、packages）
-          if [ -d bin/targets ]; then
-            cp -r bin/targets ${{ github.workspace }}/artifacts/ || true
-          fi
-          # 也把用到的 buildinfo 拷贝出来
-          cp -f .config ${{ github.workspace }}/artifacts/.config || true
-          # 列出文件，便于构建日志查看
-          echo "Artifacts:"
-          ls -la ${{ github.workspace }}/artifacts || true
-
-      - name: Upload artifacts (for debugging & download)
-        uses: actions/upload-artifact@v4
-        with:
-          name: openwrt-build-artifacts
-          path: artifacts
-
-      - name: Create Release and Upload Assets
-        uses: ncipollo/release-action@v1
-        with:
-          tag: build-${{ github.run_id }}
-          name: "OpenWrt build ${{ github.run_id }} (${ { { github.ref_name } } })"
-          files: artifacts/**/*
-          draft: false
-          prerelease: false
-        # 该 Action 会自动把 artifacts/** 上传到 Release
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
