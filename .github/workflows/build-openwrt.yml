@@ -104,8 +104,8 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
          
-          ./scripts/config --enable PACKAGE_dnsmasq-full
-          ./scripts/config --disable PACKAGE_dnsmasq
+          make defconfig
+          ./scripts/kconfig.pl +CONFIG_PACKAGE_dnsmasq-full -CONFIG_PACKAGE_dnsmasq .config
           make defconfig
           
       - name: Modify default settings
