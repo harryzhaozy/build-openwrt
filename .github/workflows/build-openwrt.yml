@@ -103,7 +103,7 @@ jobs:
       - name: Enable dnsmasq-full, disable dnsmasq
         working-directory: ${{ env.WORKDIR }}
         run: |
-          cd openwrt
+         
           make defconfig
           ./scripts/kconfig.pl -w .config -s PACKAGE_dnsmasq-full=y
           ./scripts/kconfig.pl -w .config -s PACKAGE_dnsmasq=n
