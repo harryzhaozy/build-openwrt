@@ -99,7 +99,14 @@ jobs:
             cp "$cfg_path" .config
             make defconfig
           fi
-
+      
+      - name: Enable dnsmasq-full, disable dnsmasq
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          ./scripts/config/disable dnsmasq
+          ./scripts/config/enable dnsmasq-full
+          make defconfig
+          
       - name: Modify default settings
         working-directory: ${{ env.WORKDIR }}
         run: |
