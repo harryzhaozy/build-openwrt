@@ -103,8 +103,15 @@ jobs:
       - name: Enable dnsmasq-full, disable dnsmasq
         working-directory: ${{ env.WORKDIR }}
         run: |
-          ./scripts/config/disable dnsmasq
-          ./scripts/config/enable dnsmasq-full
+          # 确保 scripts/config 可执行
+          chmod +x scripts/config
+
+          # 先关闭 dnsmasq
+          ./scripts/config --disable CONFIG_PACKAGE_dnsmasq
+
+          # 启用 dnsmasq-full
+          ./scripts/config --enable CONFIG_PACKAGE_dnsmasq-full
+          
           make defconfig
           
       - name: Modify default settings
