@@ -100,13 +100,13 @@ jobs:
             make defconfig
           fi
       
-      - name: Enable dnsmasq-full, disable dnsmasq
-        working-directory: ${{ env.WORKDIR }}
-        run: |
+      #- name: Enable dnsmasq-full, disable dnsmasq
+      #  working-directory: ${{ env.WORKDIR }}
+      #  run: |
          
-          sed -i 's/CONFIG_PACKAGE_dnsmasq=y/# CONFIG_PACKAGE_dnsmasq is not set/' .config
-          echo "CONFIG_PACKAGE_dnsmasq-full=y" >> .config
-          make defconfig
+      #    sed -i 's/CONFIG_PACKAGE_dnsmasq=y/# CONFIG_PACKAGE_dnsmasq is not set/' .config
+      #    echo "CONFIG_PACKAGE_dnsmasq-full=y" >> .config
+      #    make defconfig
           
       - name: Modify default settings
         working-directory: ${{ env.WORKDIR }}
