@@ -85,7 +85,8 @@ jobs:
       - name: Add custom packages
         working-directory: ${{ env.WORKDIR }}/package
         run: git clone $CUSTOM_PACKAGES
-
+          rm -rf feeds/packages/lang/golang
+          git clone https://github.com/sbwml/packages_lang_golang -b 24.x feeds/packages/lang/golang
             
       - name: Update and install feeds
         working-directory: ${{ env.WORKDIR }}
@@ -156,11 +157,11 @@ jobs:
             find ${{ env.DL_DIR }} -type f -size +${DL_SIZE_LIMIT_MB}M -delete
             df -h
           fi
-
+      
       - name: Download package sources
         working-directory: ${{ env.WORKDIR }}
         run: make download -j$(nproc)
-
+      
       - name: Build OpenWrt
         working-directory: ${{ env.WORKDIR }}
         run: |
