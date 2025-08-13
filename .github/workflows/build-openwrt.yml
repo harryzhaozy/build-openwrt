@@ -166,7 +166,18 @@ jobs:
       - name: Download package sources
         working-directory: ${{ env.WORKDIR }}
         run: make download -j$(nproc)
-      
+     
+      - name: Delete old releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 列出所有 release 并删除（保留最新 1 个）
+          releases=$(gh release list --limit 100 --json name --jq '.[].name' | tail -n +2)
+          for r in $releases; do
+            echo "Deleting release: $r"
+            gh release delete "$r" --yes
+          done
+
       - name: Build OpenWrt
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -200,6 +211,9 @@ jobs:
         with:
           tag_name: openwrt-${{ github.event.inputs.openwrt_ref || 'master' }}
           name: "OpenWrt build ${{ github.event.inputs.openwrt_ref || 'master' }}"
-          files: ${{ env.WORKDIR }}/bin/targets/**/*
+          files: |
+            ${{ env.WORKDIR }}/bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz
+            ${{ env.WORKDIR }}/bin/targets/x86/64/openwrt-x86-64-generic-ext4-combined-efi.img.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
