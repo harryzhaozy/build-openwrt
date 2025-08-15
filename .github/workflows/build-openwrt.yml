@@ -42,13 +42,7 @@ jobs:
           echo "=== After cleaning ==="
           df -h
 
-      # 1. 将 TMPDIR 切到 workspace，避免 /tmp 爆满
-      - name: Set TMPDIR to workspace
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/tmp
-          echo "TMPDIR=$GITHUB_WORKSPACE/tmp" >> $GITHUB_ENV
-          echo "Temporary directory set to: $GITHUB_WORKSPACE/tmp"
-          
+     
       
 
       - name: Checkout workflow repo
@@ -178,7 +172,9 @@ jobs:
       
       - name: Download package sources
         working-directory: ${{ env.WORKDIR }}
-        run: make download -j$(nproc)
+        run: |
+         make download -j$(nproc)
+         find dl -size -1024c -exec rm -f {} \;
      
       - name: Delete old releases
         env:
