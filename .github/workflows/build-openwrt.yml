@@ -190,8 +190,8 @@ jobs:
       - name: Build OpenWrt
         working-directory: ${{ env.WORKDIR }}
         run: |
-          # make -j$(nproc) || make -j1 V=s
-          make -j2 V=s || make -j1 V=s
+           make -j$(nproc) || make -j1 V=s
+          
 
       # 构建后清理
       - name: Cleanup after build
