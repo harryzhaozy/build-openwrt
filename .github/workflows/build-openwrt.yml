@@ -142,11 +142,7 @@ jobs:
           sed -i 's/UTC/CST-8/g' package/base-files/files/bin/config_generate
           sed -i "/set system.@system\[0\].timezone='CST-8'/a\ \tset system.@system[-1].zonename='Asia/Shanghai'" \
             package/base-files/files/bin/config_generate
-            
-      - name: Patch rust bootstrap
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-            find feeds/packages/lang/rust -type f -exec sed -i 's/download-ci-llvm=true/download-ci-llvm= "if-unchanged"/g' {} +
+      
                                                                   
 
       # 设置缓存目录 & 控制缓存大小
