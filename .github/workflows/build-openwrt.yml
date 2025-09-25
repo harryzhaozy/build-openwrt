@@ -146,8 +146,8 @@ jobs:
       - name: Patch rust bootstrap
         working-directory: ${{ env.WORKDIR }}
         run: |
-            find feeds/packages/lang/rust -type f -exec sed -i 's/download-ci-llvm = true/download-ci-llvm = "if-unchanged"/g' {} +
-
+            find feeds/packages/lang/rust -type f -exec sed -i 's/download-ci-llvm=true/download-ci-llvm= "if-unchanged"/g' {} +
+                                                                  
 
       # 设置缓存目录 & 控制缓存大小
       - name: Set cache dirs
