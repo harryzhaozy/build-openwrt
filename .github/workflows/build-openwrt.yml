@@ -196,6 +196,8 @@ jobs:
 
       - name: Build OpenWrt
         working-directory: ${{ env.WORKDIR }}
+        env:
+           CI: false   # ✅ 绕过 Rust bootstrap 的 CI 检测
         run: |
            make -j$(nproc) || make -j1 V=s
           
