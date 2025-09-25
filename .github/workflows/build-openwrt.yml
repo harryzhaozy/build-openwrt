@@ -144,8 +144,8 @@ jobs:
             package/base-files/files/bin/config_generate
             
       - name: Patch rust bootstrap
+        working-directory: ${{ env.WORKDIR }}
         run: |
-            find feeds/packages/lang/rust -type f -name "Makefile" -exec sed -i 's/download-ci-llvm = true/download-ci-llvm = "if-unchanged"/g' {} +
             find feeds/packages/lang/rust -type f -exec sed -i 's/download-ci-llvm = true/download-ci-llvm = "if-unchanged"/g' {} +
 
 
