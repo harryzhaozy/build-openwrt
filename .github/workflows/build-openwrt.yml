@@ -146,13 +146,14 @@ jobs:
       - name: Patch rust bootstrap
         working-directory: ${{ env.WORKDIR }}
         run: |
-          RUST_MAKEFILE="feeds/packages/lang/rust/Makefile"
-          if [ -f "$RUST_MAKEFILE" ] && grep -q "llvm.download-ci-llvm = true" "$RUST_MAKEFILE"; then
-            sed -i 's/llvm.download-ci-llvm = true/llvm.download-ci-llvm = "false"/' "$RUST_MAKEFILE" || true
-            echo "[PATCH] 已将 llvm.download-ci-llvm 修改为 \"false\" ✅"
-          else
-            echo "[SKIP] 未找到需要替换的项，跳过补丁"
-          fi
+          #RUST_MAKEFILE="feeds/packages/lang/rust/Makefile"
+          #if [ -f "$RUST_MAKEFILE" ] && grep -q "llvm.download-ci-llvm = true" "$RUST_MAKEFILE"; then
+          #  sed -i 's/llvm.download-ci-llvm = true/llvm.download-ci-llvm = "false"/' "$RUST_MAKEFILE" || true
+          #  echo "[PATCH] 已将 llvm.download-ci-llvm 修改为 \"false\" ✅"
+          #else
+          #  echo "[SKIP] 未找到需要替换的项，跳过补丁"
+          #fi
+          sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
                                                                   
 
       # 设置缓存目录 & 控制缓存大小
