@@ -142,7 +142,17 @@ jobs:
           sed -i 's/UTC/CST-8/g' package/base-files/files/bin/config_generate
           sed -i "/set system.@system\[0\].timezone='CST-8'/a\ \tset system.@system[-1].zonename='Asia/Shanghai'" \
             package/base-files/files/bin/config_generate
-      
+
+      - name: Patch rust bootstrap
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          RUST_MAKEFILE="feeds/packages/lang/rust/Makefile"
+          if [ -f "$RUST_MAKEFILE" ] && grep -q "llvm.download-ci-llvm = true" "$RUST_MAKEFILE"; then
+            sed -i 's/llvm.download-ci-llvm = true/llvm.download-ci-llvm = "false"/' "$RUST_MAKEFILE" || true
+            echo "[PATCH] 已将 llvm.download-ci-llvm 修改为 \"false\" ✅"
+          else
+            echo "[SKIP] 未找到需要替换的项，跳过补丁"
+          fi
                                                                   
 
       # 设置缓存目录 & 控制缓存大小
@@ -192,8 +202,7 @@ jobs:
 
       - name: Build OpenWrt
         working-directory: ${{ env.WORKDIR }}
-        env:
-           CI: false   # ✅ 绕过 Rust bootstrap 的 CI 检测
+       
         run: |
            make -j$(nproc) || make -j1 V=s
           
