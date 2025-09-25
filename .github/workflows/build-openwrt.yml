@@ -14,8 +14,8 @@ on:
 permissions:
   contents: write
 env:
-  # OPENWRT_REPO: https://github.com/openwrt/openwrt.git
-  OPENWRT_REPO:  https://git.openwrt.org/openwrt/openwrt.git
+  OPENWRT_REPO: https://github.com/openwrt/openwrt.git
+  
   CUSTOM_PACKAGES: https://github.com/harryzhaozy/luci-packages.git
   WORKDIR: openwrt
   CCACHE_DIR: ${{ github.workspace }}/.ccache
