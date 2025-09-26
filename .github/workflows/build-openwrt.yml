@@ -205,7 +205,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
        
         run: |
-           make toolchain/install -j$(nproc) V=s
+           #make toolchain/install -j$(nproc) V=s
            make -j$(nproc) || make -j1 V=s
            
            #make package/feeds/packages/rust/compile -j$(nproc) V=s
