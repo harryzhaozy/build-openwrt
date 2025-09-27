@@ -219,17 +219,20 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: make toolchain/install -j$(nproc) V=s
 
-      - name: Build rust (separately)
-        working-directory: ${{ env.WORKDIR }}
-        run: make package/feeds/packages/rust/compile -j$(nproc) V=s || make package/feeds/packages/rust/compile -j1 V=s
-      - name: Verify rust build
+      - name: Build rust (separately, fail if error)
         working-directory: ${{ env.WORKDIR }}
         run: |
-          if [ -x staging_dir/hostpkg/bin/rustc ]; then
-            staging_dir/hostpkg/bin/rustc --version
+          echo "🦀 开始编译 Rust..."
+          if make package/feeds/packages/rust/compile -j$(nproc) V=s; then
+            echo "✅ Rust 并行编译成功"
           else
-            echo "Rust not found!"
-            exit 1
+            echo "⚠️ Rust 并行编译失败，尝试单线程..."
+            if make package/feeds/packages/rust/compile -j1 V=s; then
+              echo "✅ Rust 单线程编译成功"
+            else
+              echo "❌ Rust 编译失败，退出 workflow"
+              exit 1
+            fi
           fi
           
       - name: Build firmware
