@@ -33,11 +33,15 @@ jobs:
         run: |
           echo "=== Before cleaning ==="
           df -h
-          sudo rm -rf /usr/share/dotnet \
+           sudo rm -rf /usr/share/dotnet \
                       /usr/local/lib/android \
                       /opt/ghc \
                       /opt/hostedtoolcache \
-                      /usr/local/lib/node_modules
+                      /usr/local/lib/node_modules \
+                      /usr/local/share/boost \
+                      /usr/share/swift \
+                      /usr/local/lib/heroku \
+                      /usr/local/lib/firefox
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/*
           echo "=== After cleaning ==="
@@ -201,14 +205,27 @@ jobs:
             gh release delete "$r" --yes
           done
 
-      - name: Build OpenWrt
-        working-directory: ${{ env.WORKDIR }}
+      #- name: Build OpenWrt
+      #  working-directory: ${{ env.WORKDIR }}
        
-        run: |
+      #  run: |
            #make toolchain/install -j$(nproc) V=s
-           make -j$(nproc) || make -j1 V=s
+      #     make -j$(nproc) || make -j1 V=s
            
-           #make package/feeds/packages/rust/compile -j$(nproc) V=s
+      #     #make package/feeds/packages/rust/compile -j$(nproc) V=s
+      
+      # 分步骤编译，避免一次性塞爆磁盘
+      - name: Build toolchain
+        working-directory: ${{ env.WORKDIR }}
+        run: make toolchain/install -j$(nproc) V=s
+
+      - name: Build rust (separately)
+        working-directory: ${{ env.WORKDIR }}
+        run: make package/feeds/packages/rust/compile -j$(nproc) V=s || make package/feeds/packages/rust/compile -j1 V=s
+
+      - name: Build firmware
+        working-directory: ${{ env.WORKDIR }}
+        run: make -j$(nproc) || make -j1 V=s
 
       # 构建后清理
       - name: Cleanup after build
