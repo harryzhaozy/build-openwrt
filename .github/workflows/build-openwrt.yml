@@ -218,6 +218,13 @@ jobs:
       - name: Build toolchain
         working-directory: ${{ env.WORKDIR }}
         run: make toolchain/install -j$(nproc) V=s
+      - name: Cleanup after toolchain
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "清理 toolchain 临时文件..."
+          rm -rf tmp/*
+          rm -rf logs/*
+          du -sh . || true
 
       - name: Build rust (separately, fail if error)
         working-directory: ${{ env.WORKDIR }}
@@ -234,6 +241,14 @@ jobs:
               exit 1
             fi
           fi
+      - name: Cleanup after Rust
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "清理 rust 编译临时文件..."
+          rm -rf tmp/*
+          rm -rf logs/*
+          rm -rf build_dir/target-*/rust-*/target   # 只清理中间产物，保留编译结果
+          du -sh . || true
           
       - name: Build firmware
         working-directory: ${{ env.WORKDIR }}
