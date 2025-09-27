@@ -222,11 +222,21 @@ jobs:
       - name: Build rust (separately)
         working-directory: ${{ env.WORKDIR }}
         run: make package/feeds/packages/rust/compile -j$(nproc) V=s || make package/feeds/packages/rust/compile -j1 V=s
-
+      - name: Verify rust build
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -x staging_dir/hostpkg/bin/rustc ]; then
+            staging_dir/hostpkg/bin/rustc --version
+          else
+            echo "Rust not found!"
+            exit 1
+          fi
+          
       - name: Build firmware
         working-directory: ${{ env.WORKDIR }}
-        run: make -j$(nproc) || make -j1 V=s
-
+        #run: make -j$(nproc) || make -j1 V=s
+        run: make -j$(nproc) IGNORE_ERRORS=m || make -j1 V=s
+        
       # 构建后清理
       - name: Cleanup after build
         run: |
