@@ -231,9 +231,21 @@ jobs:
           name: openwrt-source
           path: ${{ env.WORKDIR }}
 
-      - name: Ensure scripts are executable
+      - name: Fix permissions after restore
         run: |
-          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
+          echo "🔧 修复脚本和工具执行权限..."
+          # 修复所有 shell 脚本
+          find ${{ env.WORKDIR }}/scripts -type f -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/ -type f -name "configure" -exec chmod +x {} \; || true
+
+          # 修复 feeds 脚本
+          find ${{ env.WORKDIR }}/feeds -type f -name "*.sh" -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/scripts -type f -name "*.pl" -exec chmod +x {} \; || true
+
+          # 修复 host 工具
+          find ${{ env.WORKDIR }}/staging_dir/host/bin -type f -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/build_dir/host -type f -exec chmod +x {} \; || true
+
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -279,9 +291,21 @@ jobs:
           name: openwrt-toolchain
           path: ${{ env.WORKDIR }}
 
-      - name: Ensure scripts are executable
+      - name: Fix permissions after restore
         run: |
-          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
+          echo "🔧 修复脚本和工具执行权限..."
+          # 修复所有 shell 脚本
+          find ${{ env.WORKDIR }}/scripts -type f -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/ -type f -name "configure" -exec chmod +x {} \; || true
+
+          # 修复 feeds 脚本
+          find ${{ env.WORKDIR }}/feeds -type f -name "*.sh" -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/scripts -type f -name "*.pl" -exec chmod +x {} \; || true
+
+          # 修复 host 工具
+          find ${{ env.WORKDIR }}/staging_dir/host/bin -type f -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/build_dir/host -type f -exec chmod +x {} \; || true
+
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -326,9 +350,21 @@ jobs:
           name: openwrt-rust
           path: ${{ env.WORKDIR }}
 
-      - name: Ensure scripts are executable
+      - name: Fix permissions after restore
         run: |
-          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
+          echo "🔧 修复脚本和工具执行权限..."
+          # 修复所有 shell 脚本
+          find ${{ env.WORKDIR }}/scripts -type f -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/ -type f -name "configure" -exec chmod +x {} \; || true
+
+          # 修复 feeds 脚本
+          find ${{ env.WORKDIR }}/feeds -type f -name "*.sh" -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/scripts -type f -name "*.pl" -exec chmod +x {} \; || true
+
+          # 修复 host 工具
+          find ${{ env.WORKDIR }}/staging_dir/host/bin -type f -exec chmod +x {} \; || true
+          find ${{ env.WORKDIR }}/build_dir/host -type f -exec chmod +x {} \; || true
+
 
       - name: Restore ccache
         uses: actions/cache@v4
