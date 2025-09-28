@@ -98,8 +98,8 @@ jobs:
           path: ${{ env.WORKDIR }}
       - name: Fix script permissions
         run: |
-          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
-          chmod +x ${{ env.WORKDIR }}/scripts/toolchain/*.sh
+          chmod +x scripts/*.sh
+          chmod +x scripts/toolchain/*.sh
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -136,8 +136,8 @@ jobs:
           path: ${{ env.WORKDIR }}
       - name: Fix script permissions
         run: |
-          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
-          chmod +x ${{ env.WORKDIR }}/scripts/toolchain/*.sh
+          chmod +x scripts/*.sh
+          chmod +x scripts/toolchain/*.sh
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -178,8 +178,8 @@ jobs:
           path: ${{ env.WORKDIR }}
       - name: Fix script permissions
         run: |
-          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
-          chmod +x ${{ env.WORKDIR }}/scripts/toolchain/*.sh
+          chmod +x scripts/*.sh
+          chmod +x scripts/toolchain/*.sh
           
       - name: Restore ccache
         uses: actions/cache@v4
