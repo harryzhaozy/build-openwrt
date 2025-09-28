@@ -245,6 +245,9 @@ jobs:
           # 修复 host 工具
           find ${{ env.WORKDIR }}/staging_dir/host/bin -type f -exec chmod +x {} \; || true
           find ${{ env.WORKDIR }}/build_dir/host -type f -exec chmod +x {} \; || true
+          chmod +x -R ${{ env.WORKDIR }}/staging_dir/host/bin || true
+          chmod +x -R ${{ env.WORKDIR }}/build_dir/host || true
+
 
 
       - name: Restore ccache
@@ -305,7 +308,8 @@ jobs:
           # 修复 host 工具
           find ${{ env.WORKDIR }}/staging_dir/host/bin -type f -exec chmod +x {} \; || true
           find ${{ env.WORKDIR }}/build_dir/host -type f -exec chmod +x {} \; || true
-
+          chmod +x -R ${{ env.WORKDIR }}/staging_dir/host/bin || true
+          chmod +x -R ${{ env.WORKDIR }}/build_dir/host || true
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -364,7 +368,8 @@ jobs:
           # 修复 host 工具
           find ${{ env.WORKDIR }}/staging_dir/host/bin -type f -exec chmod +x {} \; || true
           find ${{ env.WORKDIR }}/build_dir/host -type f -exec chmod +x {} \; || true
-
+          chmod +x -R ${{ env.WORKDIR }}/staging_dir/host/bin || true
+          chmod +x -R ${{ env.WORKDIR }}/build_dir/host || true
 
       - name: Restore ccache
         uses: actions/cache@v4
