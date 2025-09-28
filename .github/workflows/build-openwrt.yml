@@ -78,7 +78,7 @@ jobs:
           elif git ls-remote --exit-code --tags origin "$ref" >/dev/null 2>&1; then
             git checkout "tags/$ref"
           fi
-          chmod +x scripts/*.sh scripts/toolchain/*.sh
+         
 
       - name: Upload OpenWrt source
         uses: actions/upload-artifact@v4
