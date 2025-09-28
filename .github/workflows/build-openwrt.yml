@@ -181,7 +181,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: openwrt-src
-          path: .
+          path: ${{ env.WORKDIR }}
 
       - name: Build toolchain
         working-directory: ${{ env.WORKDIR }}
@@ -216,7 +216,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: openwrt-toolchain
-          path: .
+          path: ${{ env.WORKDIR }}
 
       - name: Build rust
         working-directory: ${{ env.WORKDIR }}
