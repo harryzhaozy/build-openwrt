@@ -32,16 +32,60 @@ jobs:
     outputs:
       workdir-artifact: ${{ steps.upload.outputs.artifact_name }}
     steps:
+      # 0. 释放 GitHub Runner 空间（可释放 15GB+）
       - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                      /opt/hostedtoolcache /usr/local/lib/node_modules \
-                      /usr/local/share/boost /usr/share/swift \
-                      /usr/local/lib/heroku /usr/local/lib/firefox
+          echo "=== Before cleaning ==="
+          df -h
+           sudo rm -rf /usr/share/dotnet \
+                      /usr/local/lib/android \
+                      /opt/ghc \
+                      /opt/hostedtoolcache \
+                      /usr/local/lib/node_modules \
+                      /usr/local/share/boost \
+                      /usr/share/swift \
+                      /usr/local/lib/heroku \
+                      /usr/local/lib/firefox
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+          echo "=== After cleaning ==="
+          df -h
 
-      - name: Checkout OpenWrt
+     
+      
+
+      - name: Checkout workflow repo
+        uses: actions/checkout@v4
+
+      # 恢复 ccache 缓存
+      - name: Restore ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
+          restore-keys: |
+            ccache-${{ github.event.inputs.openwrt_ref }}
+            ccache-
+
+      # 恢复 dl 缓存
+      - name: Restore dl cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DL_DIR }}
+          key: dl-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
+          restore-keys: |
+            dl-${{ github.event.inputs.openwrt_ref }}
+            dl-
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
+            gcc git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev \
+            libssl-dev python3 python3-pip python3-setuptools rsync subversion \
+            swig unzip wget zlib1g-dev
+
+      - name: Get OpenWrt source
         run: |
           git clone $OPENWRT_REPO $WORKDIR
           cd $WORKDIR
@@ -53,23 +97,117 @@ jobs:
           elif git ls-remote --exit-code --tags origin "$ref" >/dev/null 2>&1; then
             git checkout "tags/$ref"
           fi
-          # 添加自定义包
-          git clone $CUSTOM_PACKAGES package/custom-packages
-          # 更新 feeds
+
+      - name: Add custom packages
+        working-directory: ${{ env.WORKDIR }}/package
+        run: git clone $CUSTOM_PACKAGES
+      
+    
+      - name: Update and install feeds
+        working-directory: ${{ env.WORKDIR }}
+        run: |
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          # 设置 config
+      
+      - name: Update Golang
+        working-directory: ${{ env.WORKDIR }}
+        run: |    
+          rm -rf feeds/packages/lang/golang
+          git clone https://github.com/sbwml/packages_lang_golang -b 25.x feeds/packages/lang/golang
+            
+      - name: Install passwall
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          # 移除 openwrt feeds 自带的核心库
+            rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,trojan-plus,tuic-client,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+            git clone https://github.com/xiaorouji/openwrt-passwall-packages package/passwall-packages
+
+            # 移除 openwrt feeds 过时的luci版本
+            rm -rf feeds/luci/applications/luci-app-passwall
+            git clone https://github.com/xiaorouji/openwrt-passwall package/passwall-luci
+            
+      - name: Copy Config
+        working-directory: ${{ env.WORKDIR }}
+        run: |
           cfg_path="${{ github.workspace }}/${{ github.event.inputs.config_path || '.config' }}"
           if [ -f "$cfg_path" ]; then
             cp "$cfg_path" .config
             make defconfig
           fi
-          # 修复 rust bootstrap
+      
+      #- name: Enable dnsmasq-full, disable dnsmasq
+      #  working-directory: ${{ env.WORKDIR }}
+      #  run: |
+         
+      #    sed -i 's/CONFIG_PACKAGE_dnsmasq=y/# CONFIG_PACKAGE_dnsmasq is not set/' .config
+      #    echo "CONFIG_PACKAGE_dnsmasq-full=y" >> .config
+      #    make defconfig
+          
+      - name: Modify default settings
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          sed -i 's/192.168.1.1/192.168.1.10/g' package/base-files/files/bin/config_generate
+          sed -i 's/UTC/CST-8/g' package/base-files/files/bin/config_generate
+          sed -i "/set system.@system\[0\].timezone='CST-8'/a\ \tset system.@system[-1].zonename='Asia/Shanghai'" \
+            package/base-files/files/bin/config_generate
+
+      - name: Patch rust bootstrap
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          #RUST_MAKEFILE="feeds/packages/lang/rust/Makefile"
+          #if [ -f "$RUST_MAKEFILE" ] && grep -q "llvm.download-ci-llvm = true" "$RUST_MAKEFILE"; then
+          #  sed -i 's/llvm.download-ci-llvm = true/llvm.download-ci-llvm = "false"/' "$RUST_MAKEFILE" || true
+          #  echo "[PATCH] 已将 llvm.download-ci-llvm 修改为 \"false\" ✅"
+          #else
+          #  echo "[SKIP] 未找到需要替换的项，跳过补丁"
+          #fi
           sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
-          make defconfig
-          # 设置 ccache/dl 目录
+          make defconfig                                                        
+
+      # 设置缓存目录 & 控制缓存大小
+      - name: Set cache dirs
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          CCACHE_DIR: ${{ env.CCACHE_DIR }}
+          DL_DIR: ${{ env.DL_DIR }}
+        run: |
+          cp -n feeds.conf.default feeds.conf
+          echo "CONFIG_DEVEL=y" >> .config
+          echo "CONFIG_CCACHE=y" >> .config
           mkdir -p "$CCACHE_DIR" "$DL_DIR"
           ccache -M ${CCACHE_SIZE}
+          make defconfig
+
+      # 检测磁盘空间
+      - name: Check disk space before build
+        run: |
+          avail=$(df --output=avail -BG . | tail -1 | tr -d 'G')
+          echo "Available space: ${avail}G"
+          if [ "$avail" -lt 10 ]; then
+            echo "Low space (<10G), cleaning caches..."
+            rm -rf ${{ env.WORKDIR }}/build_dir/* \
+                   ${{ env.WORKDIR }}/tmp/* \
+                   ${{ env.WORKDIR }}/staging_dir/*
+            find ${{ env.DL_DIR }} -type f -size +${DL_SIZE_LIMIT_MB}M -delete
+            df -h
+          fi
+      
+      - name: Download package sources
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+         make download -j$(nproc)
+         find dl -size -1024c -exec rm -f {} \;
+     
+      - name: Delete old releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 列出所有 release 并删除（保留最新 1 个）
+          releases=$(gh release list --limit 100 --json name --jq '.[].name' | tail -n +2)
+          for r in $releases; do
+            echo "Deleting release: $r"
+            gh release delete "$r" --yes
+          done
 
       - name: Ensure scripts are executable
         run: |
