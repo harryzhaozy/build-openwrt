@@ -98,6 +98,8 @@ jobs:
           path: ${{ env.WORKDIR }}
       - name: Fix script permissions
         run: |
+          pwd
+          ls
           chmod +x scripts/*.sh
           chmod +x scripts/toolchain/*.sh
 
