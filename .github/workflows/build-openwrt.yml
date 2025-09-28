@@ -93,6 +93,7 @@ jobs:
           elif git ls-remote --exit-code --tags origin "$ref" >/dev/null 2>&1; then
             git checkout "tags/$ref"
           fi
+          chmod -R +x scripts
 
       - name: Add custom packages
         working-directory: ${{ env.WORKDIR }}/package
