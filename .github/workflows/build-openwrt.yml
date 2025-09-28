@@ -28,63 +28,21 @@ jobs:
   prepare:
     runs-on: ubuntu-22.04
     outputs:
-      ref: ${{ steps.ref.outputs.value }}
+      artifact-path: ${{ steps.upload.outputs.artifact-path }}
     steps:
-      - name: Free disk space
-        run: |
-          echo "=== Before cleaning ==="
-          df -h
-          sudo rm -rf /usr/share/dotnet \
-                       /usr/local/lib/android \
-                       /opt/ghc \
-                       /opt/hostedtoolcache \
-                       /usr/local/lib/node_modules \
-                       /usr/local/share/boost \
-                       /usr/share/swift \
-                       /usr/local/lib/heroku \
-                       /usr/local/lib/firefox
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/*
-          echo "=== After cleaning ==="
-          df -h
-
       - name: Checkout workflow repo
         uses: actions/checkout@v4
-
-      - name: Save input ref
-        id: ref
-        run: echo "value=${{ github.event.inputs.openwrt_ref }}" >> $GITHUB_OUTPUT
-
-      # 恢复缓存
-      - name: Restore ccache cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ccache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
-          restore-keys: |
-            ccache-${{ github.event.inputs.openwrt_ref }}
-            ccache-
-      - name: Restore dl cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.DL_DIR }}
-          key: dl-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
-          restore-keys: |
-            dl-${{ github.event.inputs.openwrt_ref }}
-            dl-
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
-            gcc git java-propose-classpath libelf-dev libncurses5-dev libncursesw5-dev \
-            libssl-dev python3 python3-pip python3-setuptools rsync subversion \
-            swig unzip wget zlib1g-dev
+          sudo apt-get install -y build-essential ccache git wget unzip rsync gawk \
+            libncurses5-dev libncursesw5-dev libssl-dev python3 python3-pip zlib1g-dev
 
-      - name: Get OpenWrt source
+      - name: Clone OpenWrt
         run: |
-          git clone $OPENWRT_REPO $WORKDIR
-          cd $WORKDIR
+          git clone $OPENWRT_REPO ${{ env.WORKDIR }}
+          cd ${{ env.WORKDIR }}
           ref="${{ github.event.inputs.openwrt_ref }}"
           if git rev-parse --verify --quiet "$ref" >/dev/null; then
             git checkout "$ref"
@@ -93,96 +51,42 @@ jobs:
           elif git ls-remote --exit-code --tags origin "$ref" >/dev/null 2>&1; then
             git checkout "tags/$ref"
           fi
-          chmod -R +x scripts
+          # 修复可执行权限
+          chmod +x scripts/*.sh scripts/toolchain/*.sh
 
-      - name: Add custom packages
-        working-directory: ${{ env.WORKDIR }}/package
-        run: git clone $CUSTOM_PACKAGES
-
-      - name: Update and install feeds
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: Update Golang
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          rm -rf feeds/packages/lang/golang
-          git clone https://github.com/sbwml/packages_lang_golang -b 25.x feeds/packages/lang/golang
-
-      - name: Install passwall
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,trojan-plus,tuic-client,v2ray-plugin,xray-plugin,geoview,shadow-tls}
-          git clone https://github.com/xiaorouji/openwrt-passwall-packages package/passwall-packages
-          rm -rf feeds/luci/applications/luci-app-passwall
-          git clone https://github.com/xiaorouji/openwrt-passwall package/passwall-luci
-
-      - name: Copy Config
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          cfg_path="${{ github.workspace }}/${{ github.event.inputs.config_path || '.config' }}"
-          if [ -f "$cfg_path" ]; then
-            cp "$cfg_path" .config
-            make defconfig
-          fi
-
-      - name: Modify default settings
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          sed -i 's/192.168.1.1/192.168.1.10/g' package/base-files/files/bin/config_generate
-          sed -i 's/UTC/CST-8/g' package/base-files/files/bin/config_generate
-          sed -i "/set system.@system\[0\].timezone='CST-8'/a\ \tset system.@system[-1].zonename='Asia/Shanghai'" \
-            package/base-files/files/bin/config_generate
-
-      - name: Patch rust bootstrap
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
-          make defconfig
-
-      - name: Set cache dirs
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          mkdir -p "$CCACHE_DIR" "$DL_DIR"
-          echo "CONFIG_DEVEL=y" >> .config
-          echo "CONFIG_CCACHE=y" >> .config
-          ccache -M ${CCACHE_SIZE}
-          make defconfig
-
-      - name: Download package sources
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          make download -j$(nproc)
-          find dl -size -1024c -exec rm -f {} \;
-
-      - name: Upload prepared source
-        uses: actions/upload-artifact@v4
+      - name: Upload OpenWrt artifact
+        uses: actions/upload-artifact@v3
+        id: upload
         with:
-          name: openwrt-src
+          name: openwrt-source
           path: ${{ env.WORKDIR }}
 
-  toolchain:
-    needs: prepare
+  build-toolchain:
     runs-on: ubuntu-22.04
+    needs: prepare
     steps:
-      - name: Restore caches
+      - name: Download OpenWrt artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: openwrt-source
+          path: ${{ env.WORKDIR }}
+
+      - name: Fix script permissions
+        run: |
+          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
+          chmod +x ${{ env.WORKDIR }}/scripts/toolchain/*.sh
+
+      - name: Restore ccache
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ env.CCACHE_DIR }}
-            ${{ env.DL_DIR }}
-          key: cache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
-          restore-keys: |
-            cache-${{ github.event.inputs.openwrt_ref }}
-            cache-
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
 
-      - name: Download prepared source
-        uses: actions/download-artifact@v4
+      - name: Restore dl cache
+        uses: actions/cache@v4
         with:
-          name: openwrt-src
-          path: ${{ env.WORKDIR }}
+          path: ${{ env.DL_DIR }}
+          key: dl-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
 
       - name: Build toolchain
         working-directory: ${{ env.WORKDIR }}
@@ -192,79 +96,95 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: rm -rf tmp/* logs/*
 
-      - name: Upload after toolchain
-        uses: actions/upload-artifact@v4
+      - name: Upload toolchain artifact
+        uses: actions/upload-artifact@v3
         with:
           name: openwrt-toolchain
           path: ${{ env.WORKDIR }}
 
-  rust:
-    needs: toolchain
+  build-rust:
     runs-on: ubuntu-22.04
+    needs: build-toolchain
     steps:
-      - name: Restore caches
+      - name: Download OpenWrt + Toolchain artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: openwrt-toolchain
+          path: ${{ env.WORKDIR }}
+
+      - name: Fix script permissions
+        run: |
+          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
+          chmod +x ${{ env.WORKDIR }}/scripts/toolchain/*.sh
+
+      - name: Restore ccache
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ env.CCACHE_DIR }}
-            ${{ env.DL_DIR }}
-          key: cache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
-          restore-keys: |
-            cache-${{ github.event.inputs.openwrt_ref }}
-            cache-
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
 
-      - name: Download toolchain build
-        uses: actions/download-artifact@v4
+      - name: Restore dl cache
+        uses: actions/cache@v4
         with:
-          name: openwrt-toolchain
-          path: ${{ env.WORKDIR }}
+          path: ${{ env.DL_DIR }}
+          key: dl-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
 
-      - name: Build rust
+      - name: Build Rust
         working-directory: ${{ env.WORKDIR }}
         run: |
           if make package/feeds/packages/rust/compile -j$(nproc) V=s; then
-            echo "Rust compiled (parallel)"
+            echo "Rust parallel build success"
           else
-            echo "Retry single-thread"
+            echo "Rust parallel build failed, trying single-thread..."
             make package/feeds/packages/rust/compile -j1 V=s
           fi
 
-      - name: Cleanup after rust
+      - name: Cleanup after Rust
         working-directory: ${{ env.WORKDIR }}
         run: rm -rf tmp/* logs/* build_dir/target-*/rust-*/target
 
-      - name: Upload after rust
-        uses: actions/upload-artifact@v4
+      - name: Upload Rust artifact
+        uses: actions/upload-artifact@v3
         with:
           name: openwrt-rust
           path: ${{ env.WORKDIR }}
 
-  firmware:
-    needs: rust
+  build-firmware:
     runs-on: ubuntu-22.04
+    needs: build-rust
     steps:
-      - name: Restore caches
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.CCACHE_DIR }}
-            ${{ env.DL_DIR }}
-          key: cache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
-          restore-keys: |
-            cache-${{ github.event.inputs.openwrt_ref }}
-            cache-
-
-      - name: Download rust build
-        uses: actions/download-artifact@v4
+      - name: Download OpenWrt + Rust artifact
+        uses: actions/download-artifact@v3
         with:
           name: openwrt-rust
-          path: .
+          path: ${{ env.WORKDIR }}
+
+      - name: Fix script permissions
+        run: |
+          chmod +x ${{ env.WORKDIR }}/scripts/*.sh
+          chmod +x ${{ env.WORKDIR }}/scripts/toolchain/*.sh
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
+
+      - name: Restore dl cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DL_DIR }}
+          key: dl-${{ github.event.inputs.openwrt_ref }}-${{ runner.os }}
 
       - name: Build firmware
         working-directory: ${{ env.WORKDIR }}
         run: make -j$(nproc) IGNORE_ERRORS=m || make -j1 V=s
 
-      - name: Upload firmware
+      - name: Cleanup after firmware
+        working-directory: ${{ env.WORKDIR }}
+        run: rm -rf build_dir/* staging_dir/* tmp/* logs/*
+
+      - name: Upload firmware release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: openwrt-${{ github.event.inputs.openwrt_ref || 'master' }}
